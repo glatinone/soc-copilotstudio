@@ -1,0 +1,36 @@
+# Environment and secrets
+.env
+.env.local
+*.env
+secrets.json
+credentials.json
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+
+# Node (if anyone forks and adds tooling)
+node_modules/
+npm-debug.log*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Temporary files
+*.tmp
+*.bak
+*.backup
