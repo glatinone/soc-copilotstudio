@@ -1,0 +1,174 @@
+{
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {},
+    "triggers": {
+      "Recurrence": {
+        "type": "Recurrence",
+        "recurrence": {
+          "frequency": "Minute",
+          "interval": 15
+        }
+      }
+    },
+    "actions": {
+      "Get_Graph_API_Access_Token": {
+        "type": "Http",
+        "inputs": {
+          "method": "POST",
+          "uri": "https://login.microsoftonline.com/YOUR_TENANT_ID/oauth2/v2.0/token",
+          "headers": {
+            "Content-Type": "application/x-www-form-urlencoded"
+          },
+          "body": "client_id=YOUR_CLIENT_ID&client_secret=YOUR_CLIENT_SECRET&scope=https://graph.microsoft.com/.default&grant_type=client_credentials"
+        },
+        "runAfter": {}
+      },
+      "Parse_Access_Token": {
+        "type": "ParseJson",
+        "inputs": {
+          "content": "@body('Get_Graph_API_Access_Token')",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "access_token": { "type": "string" },
+              "token_type": { "type": "string" },
+              "expires_in": { "type": "integer" }
+            }
+          }
+        },
+        "runAfter": {
+          "Get_Graph_API_Access_Token": ["Succeeded"]
+        }
+      },
+      "Pull_Admin_Audit_Logs_from_Graph_API": {
+        "type": "Http",
+        "inputs": {
+          "method": "GET",
+          "uri": "https://graph.microsoft.com/v1.0/auditLogs/directoryAudits?$filter=activityDateTime%20ge%20@{addMinutes(utcNow(), -15)}&$orderby=activityDateTime%20desc&$top=50",
+          "headers": {
+            "Authorization": "@{concat('Bearer ', body('Parse_Access_Token')?['access_token'])}",
+            "Content-Type": "application/json"
+          }
+        },
+        "runAfter": {
+          "Parse_Access_Token": ["Succeeded"]
+        }
+      },
+      "Parse_Audit_Log_Results": {
+        "type": "ParseJson",
+        "inputs": {
+          "content": "@body('Pull_Admin_Audit_Logs_from_Graph_API')",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string" },
+                    "activityDateTime": { "type": "string" },
+                    "activityDisplayName": { "type": "string" },
+                    "category": { "type": "string" },
+                    "result": { "type": "string" },
+                    "initiatedBy": {
+                      "type": "object",
+                      "properties": {
+                        "user": {
+                          "type": "object",
+                          "properties": {
+                            "displayName": { "type": "string" },
+                            "userPrincipalName": { "type": "string" },
+                            "ipAddress": { "type": "string" }
+                          }
+                        }
+                      }
+                    },
+                    "targetResources": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "displayName": { "type": "string" },
+                          "type": { "type": "string" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "runAfter": {
+          "Pull_Admin_Audit_Logs_from_Graph_API": ["Succeeded"]
+        }
+      },
+      "Check_if_audit_events_exist": {
+        "type": "If",
+        "expression": {
+          "greater": [
+            "@length(body('Parse_Audit_Log_Results')?['value'])",
+            0
+          ]
+        },
+        "actions": {
+          "Filter_High_Risk_Audit_Events": {
+            "type": "Query",
+            "inputs": {
+              "from": "@body('Parse_Audit_Log_Results')?['value']",
+              "where": "@or(\n  contains(item()?['activityDisplayName'], 'Add'),\n  contains(item()?['activityDisplayName'], 'Delete'),\n  contains(item()?['activityDisplayName'], 'Update'),\n  contains(item()?['activityDisplayName'], 'Reset'),\n  contains(item()?['activityDisplayName'], 'Disable'),\n  contains(item()?['activityDisplayName'], 'Enable'),\n  contains(item()?['activityDisplayName'], 'role'),\n  contains(item()?['activityDisplayName'], 'policy')\n)"
+            },
+            "runAfter": {}
+          },
+          "Build_Compliance_Investigation_Prompt": {
+            "type": "Compose",
+            "inputs": "You are the Compliance and Audit Agent. Analyze these admin activity logs detected live from Microsoft Entra ID.\n\nAUDIT LOG DATA (last 15 minutes):\nTotal events: @{length(body('Parse_Audit_Log_Results')?['value'])}\nHigh-risk events filtered: @{length(body('Filter_High_Risk_Audit_Events'))}\n\nHigh-risk activity details:\n@{string(body('Filter_High_Risk_Audit_Events'))}\n\nAll events summary:\n@{string(body('Parse_Audit_Log_Results')?['value'])}\n\nAnalysis timestamp: @{utcNow()}\n\nPlease analyze and provide:\n1. Summary of admin activities detected\n2. Any policy changes, role assignments, or permission escalations\n3. Compliance risk assessment against CIS Controls and ISO 27001\n4. Identify any suspicious or unauthorized admin actions\n5. User accounts involved and their legitimacy\n6. Severity rating: CRITICAL / HIGH / MEDIUM / LOW\n7. Recommended remediation actions\n8. Whether this requires escalation to SOC Summary Agent\n\nFormat as full COMPLIANCE AUDIT INVESTIGATION REPORT.",
+            "runAfter": {
+              "Filter_High_Risk_Audit_Events": ["Succeeded"]
+            }
+          },
+          "Send_to_Compliance_Audit_Agent": {
+            "type": "Http",
+            "inputs": {
+              "method": "POST",
+              "uri": "https://YOUR_AGENT_ENDPOINT",
+              "headers": {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer YOUR_AGENT_API_KEY"
+              },
+              "body": {
+                "type": "message",
+                "text": "@{outputs('Build_Compliance_Investigation_Prompt')}"
+              }
+            },
+            "runAfter": {
+              "Build_Compliance_Investigation_Prompt": ["Succeeded"]
+            }
+          }
+        },
+        "else": {
+          "actions": {
+            "Log_No_Suspicious_Activity": {
+              "type": "Compose",
+              "inputs": "Flow C ran at @{utcNow()} - No admin audit activity detected in the last 15 minutes. Compliance status: NORMAL.",
+              "runAfter": {}
+            }
+          }
+        },
+        "runAfter": {
+          "Parse_Audit_Log_Results": ["Succeeded"]
+        }
+      },
+      "Flow_C_Execution_Summary": {
+        "type": "Compose",
+        "inputs": "Flow C completed at: @{utcNow()}\nAudit events found: @{length(body('Parse_Audit_Log_Results')?['value'])}\nStatus: @{if(greater(length(body('Parse_Audit_Log_Results')?['value']), 0), 'AUDIT ACTIVITY DETECTED - sent to Compliance Audit Agent', 'NORMAL - no admin activity')}",
+        "runAfter": {
+          "Check_if_audit_events_exist": ["Succeeded", "Failed", "Skipped"]
+        }
+      }
+    }
+  }
+}

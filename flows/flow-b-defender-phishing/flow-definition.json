@@ -1,0 +1,201 @@
+{
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {},
+    "triggers": {
+      "Recurrence": {
+        "type": "Recurrence",
+        "recurrence": {
+          "frequency": "Minute",
+          "interval": 5
+        }
+      }
+    },
+    "actions": {
+      "Get_Graph_API_Access_Token": {
+        "type": "Http",
+        "inputs": {
+          "method": "POST",
+          "uri": "https://login.microsoftonline.com/YOUR_TENANT_ID/oauth2/v2.0/token",
+          "headers": {
+            "Content-Type": "application/x-www-form-urlencoded"
+          },
+          "body": "client_id=YOUR_CLIENT_ID&client_secret=YOUR_CLIENT_SECRET&scope=https://graph.microsoft.com/.default&grant_type=client_credentials"
+        },
+        "runAfter": {}
+      },
+      "Parse_Access_Token": {
+        "type": "ParseJson",
+        "inputs": {
+          "content": "@body('Get_Graph_API_Access_Token')",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "access_token": { "type": "string" },
+              "token_type": { "type": "string" },
+              "expires_in": { "type": "integer" }
+            }
+          }
+        },
+        "runAfter": {
+          "Get_Graph_API_Access_Token": ["Succeeded"]
+        }
+      },
+      "Pull_Phishing_Alerts_from_Defender": {
+        "type": "Http",
+        "inputs": {
+          "method": "GET",
+          "uri": "https://graph.microsoft.com/v1.0/security/alerts?$filter=category%20eq%20'Phishing'%20and%20status%20ne%20'resolved'&$orderby=createdDateTime%20desc&$top=20",
+          "headers": {
+            "Authorization": "@{concat('Bearer ', body('Parse_Access_Token')?['access_token'])}",
+            "Content-Type": "application/json"
+          }
+        },
+        "runAfter": {
+          "Parse_Access_Token": ["Succeeded"]
+        }
+      },
+      "Parse_Defender_Alerts": {
+        "type": "ParseJson",
+        "inputs": {
+          "content": "@body('Pull_Phishing_Alerts_from_Defender')",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string" },
+                    "title": { "type": "string" },
+                    "severity": { "type": "string" },
+                    "status": { "type": "string" },
+                    "category": { "type": "string" },
+                    "description": { "type": "string" },
+                    "createdDateTime": { "type": "string" },
+                    "userStates": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "userPrincipalName": { "type": "string" },
+                          "emailRole": { "type": "string" }
+                        }
+                      }
+                    },
+                    "networkConnections": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "destinationUrl": { "type": "string" }
+                        }
+                      }
+                    },
+                    "fileStates": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": { "type": "string" },
+                          "fileHash": {
+                            "type": "object",
+                            "properties": {
+                              "hashValue": { "type": "string" }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "runAfter": {
+          "Pull_Phishing_Alerts_from_Defender": ["Succeeded"]
+        }
+      },
+      "Check_if_phishing_alerts_exist": {
+        "type": "If",
+        "expression": {
+          "greater": [
+            "@length(body('Parse_Defender_Alerts')?['value'])",
+            0
+          ]
+        },
+        "actions": {
+          "Process_Each_Phishing_Alert": {
+            "type": "Foreach",
+            "foreach": "@body('Parse_Defender_Alerts')?['value']",
+            "actions": {
+              "Skip_already_resolved_alerts": {
+                "type": "If",
+                "expression": {
+                  "not": {
+                    "equals": [
+                      "@item()?['status']",
+                      "resolved"
+                    ]
+                  }
+                },
+                "actions": {
+                  "Build_Phishing_Investigation_Prompt": {
+                    "type": "Compose",
+                    "inputs": "You are the Phishing Investigation Agent. Analyze this phishing alert detected live by Microsoft Defender for Office 365.\n\nLIVE DEFENDER ALERT:\nAlert ID: @{item()?['id']}\nTitle: @{item()?['title']}\nSeverity: @{item()?['severity']}\nDetected at: @{item()?['createdDateTime']}\nCategory: @{item()?['category']}\nDescription: @{item()?['description']}\n\nAffected Users: @{string(item()?['userStates'])}\nSuspicious URLs detected: @{string(item()?['networkConnections'])}\nSuspicious files: @{string(item()?['fileStates'])}\n\nPlease analyze this alert and provide:\n1. Phishing attack classification (spear phishing / BEC / credential harvest / malware delivery)\n2. Risk level (Critical / High / Medium / Low)\n3. Sender analysis if available\n4. Phishing indicators found\n5. Who is targeted and business impact\n6. Check for BEC indicators if Finance or C-level is targeted\n7. Immediate recommended actions\n8. Whether this should escalate to SOC Summary Agent\n\nFormat as full PHISHING INVESTIGATION REPORT.",
+                    "runAfter": {}
+                  },
+                  "Send_Alert_to_Phishing_Agent": {
+                    "type": "Http",
+                    "inputs": {
+                      "method": "POST",
+                      "uri": "https://YOUR_AGENT_ENDPOINT",
+                      "headers": {
+                        "Content-Type": "application/json",
+                        "Authorization": "Bearer YOUR_AGENT_API_KEY"
+                      },
+                      "body": {
+                        "type": "message",
+                        "text": "@{outputs('Build_Phishing_Investigation_Prompt')}"
+                      }
+                    },
+                    "runAfter": {
+                      "Build_Phishing_Investigation_Prompt": ["Succeeded"]
+                    }
+                  }
+                },
+                "else": {
+                  "actions": {}
+                },
+                "runAfter": {}
+              }
+            },
+            "runAfter": {}
+          }
+        },
+        "else": {
+          "actions": {
+            "Log_No_Phishing_Alerts": {
+              "type": "Compose",
+              "inputs": "Flow B ran at @{utcNow()} - No new Defender phishing alerts. System normal.",
+              "runAfter": {}
+            }
+          }
+        },
+        "runAfter": {
+          "Parse_Defender_Alerts": ["Succeeded"]
+        }
+      },
+      "Flow_B_Execution_Summary": {
+        "type": "Compose",
+        "inputs": "Flow B completed at: @{utcNow()}\nPhishing alerts found: @{length(body('Parse_Defender_Alerts')?['value'])}\nStatus: @{if(greater(length(body('Parse_Defender_Alerts')?['value']), 0), 'PHISHING ALERTS DETECTED - sent to Phishing Investigation Agent', 'NORMAL - no new phishing alerts')}",
+        "runAfter": {
+          "Check_if_phishing_alerts_exist": ["Succeeded", "Failed", "Skipped"]
+        }
+      }
+    }
+  }
+}

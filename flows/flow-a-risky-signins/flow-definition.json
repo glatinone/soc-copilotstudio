@@ -1,0 +1,187 @@
+{
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {},
+    "triggers": {
+      "Recurrence": {
+        "type": "Recurrence",
+        "recurrence": {
+          "frequency": "Minute",
+          "interval": 5
+        }
+      }
+    },
+    "actions": {
+      "Get_Graph_API_Access_Token": {
+        "type": "Http",
+        "inputs": {
+          "method": "POST",
+          "uri": "https://login.microsoftonline.com/YOUR_TENANT_ID/oauth2/v2.0/token",
+          "headers": {
+            "Content-Type": "application/x-www-form-urlencoded"
+          },
+          "body": "client_id=YOUR_CLIENT_ID&client_secret=YOUR_CLIENT_SECRET&scope=https://graph.microsoft.com/.default&grant_type=client_credentials"
+        },
+        "runAfter": {}
+      },
+      "Parse_Access_Token": {
+        "type": "ParseJson",
+        "inputs": {
+          "content": "@body('Get_Graph_API_Access_Token')",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "access_token": { "type": "string" },
+              "token_type": { "type": "string" },
+              "expires_in": { "type": "integer" }
+            }
+          }
+        },
+        "runAfter": {
+          "Get_Graph_API_Access_Token": ["Succeeded"]
+        }
+      },
+      "Pull_Risky_Sign-ins_from_Graph_API": {
+        "type": "Http",
+        "inputs": {
+          "method": "GET",
+          "uri": "https://graph.microsoft.com/v1.0/auditLogs/signIns?$filter=riskLevelDuringSignIn%20ne%20'none'&$orderby=createdDateTime%20desc&$top=50",
+          "headers": {
+            "Authorization": "@{concat('Bearer ', body('Parse_Access_Token')?['access_token'])}",
+            "Content-Type": "application/json"
+          }
+        },
+        "runAfter": {
+          "Parse_Access_Token": ["Succeeded"]
+        }
+      },
+      "Parse_Sign-in_Results": {
+        "type": "ParseJson",
+        "inputs": {
+          "content": "@body('Pull_Risky_Sign-ins_from_Graph_API')",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string" },
+                    "createdDateTime": { "type": "string" },
+                    "userDisplayName": { "type": "string" },
+                    "userPrincipalName": { "type": "string" },
+                    "ipAddress": { "type": "string" },
+                    "location": {
+                      "type": "object",
+                      "properties": {
+                        "city": { "type": "string" },
+                        "countryOrRegion": { "type": "string" }
+                      }
+                    },
+                    "riskLevelDuringSignIn": { "type": "string" },
+                    "riskState": { "type": "string" },
+                    "status": {
+                      "type": "object",
+                      "properties": {
+                        "errorCode": { "type": "integer" }
+                      }
+                    },
+                    "deviceDetail": {
+                      "type": "object",
+                      "properties": {
+                        "deviceId": { "type": "string" },
+                        "displayName": { "type": "string" },
+                        "operatingSystem": { "type": "string" }
+                      }
+                    },
+                    "authenticationRequirement": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "runAfter": {
+          "Pull_Risky_Sign-ins_from_Graph_API": ["Succeeded"]
+        }
+      },
+      "Check_if_risky_sign-ins_exist": {
+        "type": "If",
+        "expression": {
+          "greater": [
+            "@length(body('Parse_Sign-in_Results')?['value'])",
+            0
+          ]
+        },
+        "actions": {
+          "Format_Sign-in_Records": {
+            "type": "Select",
+            "inputs": {
+              "from": "@body('Parse_Sign-in_Results')?['value']",
+              "select": {
+                "id": "@item()?['id']",
+                "timestamp": "@item()?['createdDateTime']",
+                "user": "@item()?['userDisplayName']",
+                "email": "@item()?['userPrincipalName']",
+                "ipAddress": "@item()?['ipAddress']",
+                "city": "@item()?['location']?['city']",
+                "country": "@item()?['location']?['countryOrRegion']",
+                "riskLevel": "@item()?['riskLevelDuringSignIn']",
+                "riskState": "@item()?['riskState']",
+                "mfaRequired": "@item()?['authenticationRequirement']",
+                "device": "@item()?['deviceDetail']?['displayName']"
+              }
+            },
+            "runAfter": {}
+          },
+          "Build_Investigation_Prompt": {
+            "type": "Compose",
+            "inputs": "You are the Identity Threat Agent. Analyze these risky sign-ins detected live from Microsoft Entra ID.\n\nRISKY SIGN-IN DATA (last 5 minutes):\nTotal risky events: @{length(body('Parse_Sign-in_Results')?['value'])}\n\nDetailed records:\n@{string(outputs('Format_Sign-in_Records'))}\n\nAnalysis timestamp: @{utcNow()}\n\nPlease provide:\n1. Risk assessment for each sign-in event\n2. Identify any impossible travel patterns\n3. Flag any MFA bypass or anomalous authentication\n4. Correlate events that may indicate coordinated attack\n5. Severity rating: CRITICAL / HIGH / MEDIUM / LOW\n6. Immediate recommended actions\n7. Whether this requires escalation to SOC Summary Agent\n\nFormat as full IDENTITY THREAT INVESTIGATION REPORT.",
+            "runAfter": {
+              "Format_Sign-in_Records": ["Succeeded"]
+            }
+          },
+          "Send_to_Identity_Threat_Agent": {
+            "type": "Http",
+            "inputs": {
+              "method": "POST",
+              "uri": "https://YOUR_AGENT_ENDPOINT",
+              "headers": {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer YOUR_AGENT_API_KEY"
+              },
+              "body": {
+                "type": "message",
+                "text": "@{outputs('Build_Investigation_Prompt')}"
+              }
+            },
+            "runAfter": {
+              "Build_Investigation_Prompt": ["Succeeded"]
+            }
+          }
+        },
+        "else": {
+          "actions": {
+            "Log_No_Risky_Sign-ins": {
+              "type": "Compose",
+              "inputs": "Flow A ran at @{utcNow()} - No risky sign-ins detected in Entra ID. System normal.",
+              "runAfter": {}
+            }
+          }
+        },
+        "runAfter": {
+          "Parse_Sign-in_Results": ["Succeeded"]
+        }
+      },
+      "Flow_A_Execution_Summary": {
+        "type": "Compose",
+        "inputs": "Flow A completed at: @{utcNow()}\nRisky sign-ins found: @{length(body('Parse_Sign-in_Results')?['value'])}\nStatus: @{if(greater(length(body('Parse_Sign-in_Results')?['value']), 0), 'INCIDENTS DETECTED - sent to Identity Threat Agent', 'NORMAL - no risky sign-ins')}",
+        "runAfter": {
+          "Check_if_risky_sign-ins_exist": ["Succeeded", "Failed", "Skipped"]
+        }
+      }
+    }
+  }
+}
