@@ -1,0 +1,49 @@
+{
+  "value": [
+    {
+      "id": "alert-phish-001-bec-cfo",
+      "title": "Phishing email targeting CFO",
+      "severity": "high",
+      "status": "active",
+      "category": "Phishing",
+      "description": "Defender detected a phishing email impersonating Microsoft, targeting the CFO with a credential harvesting link.",
+      "createdDateTime": "2026-06-04T09:12:00Z",
+      "userStates": [
+        {
+          "userPrincipalName": "cfo@yourcompany.com",
+          "emailRole": "to"
+        }
+      ],
+      "networkConnections": [
+        {
+          "destinationUrl": "http://micros0ft-verify-account.com/login"
+        }
+      ],
+      "fileStates": []
+    },
+    {
+      "id": "alert-phish-002-malware-attachment",
+      "title": "Malicious attachment detected in inbound email",
+      "severity": "medium",
+      "status": "active",
+      "category": "Phishing",
+      "description": "An email with a macro-enabled Excel attachment was detected. The attachment has been quarantined.",
+      "createdDateTime": "2026-06-04T08:44:00Z",
+      "userStates": [
+        {
+          "userPrincipalName": "finance.team@yourcompany.com",
+          "emailRole": "to"
+        }
+      ],
+      "networkConnections": [],
+      "fileStates": [
+        {
+          "name": "Q2-Invoice-2026.xlsm",
+          "fileHash": {
+            "hashValue": "a3f1b2c4d5e6f7a8b9c0d1e2f3a4b5c6"
+          }
+        }
+      ]
+    }
+  ]
+}
