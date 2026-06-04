@@ -1,0 +1,68 @@
+{
+  "value": [
+    {
+      "id": "audit-001-global-admin-assigned",
+      "activityDateTime": "2026-06-04T02:15:00Z",
+      "activityDisplayName": "Add member to role",
+      "category": "RoleManagement",
+      "result": "success",
+      "initiatedBy": {
+        "user": {
+          "displayName": "IT Admin",
+          "userPrincipalName": "it.admin@yourcompany.com",
+          "ipAddress": "10.0.1.5"
+        }
+      },
+      "targetResources": [
+        {
+          "displayName": "john.doe@yourcompany.com",
+          "type": "User"
+        },
+        {
+          "displayName": "Global Administrator",
+          "type": "Role"
+        }
+      ]
+    },
+    {
+      "id": "audit-002-conditional-access-modified",
+      "activityDateTime": "2026-06-04T01:48:00Z",
+      "activityDisplayName": "Update conditional access policy",
+      "category": "Policy",
+      "result": "success",
+      "initiatedBy": {
+        "user": {
+          "displayName": "Unknown User",
+          "userPrincipalName": "svc.account@yourcompany.com",
+          "ipAddress": "185.220.101.78"
+        }
+      },
+      "targetResources": [
+        {
+          "displayName": "Require MFA for All Users",
+          "type": "Policy"
+        }
+      ]
+    },
+    {
+      "id": "audit-003-password-reset-privileged",
+      "activityDateTime": "2026-06-04T03:22:00Z",
+      "activityDisplayName": "Reset user password",
+      "category": "UserManagement",
+      "result": "success",
+      "initiatedBy": {
+        "user": {
+          "displayName": "IT Admin",
+          "userPrincipalName": "it.admin@yourcompany.com",
+          "ipAddress": "10.0.1.5"
+        }
+      },
+      "targetResources": [
+        {
+          "displayName": "cfo@yourcompany.com",
+          "type": "User"
+        }
+      ]
+    }
+  ]
+}
