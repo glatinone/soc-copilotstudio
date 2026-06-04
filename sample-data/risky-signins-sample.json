@@ -1,0 +1,70 @@
+{
+  "value": [
+    {
+      "id": "signin-001-impossible-travel",
+      "createdDateTime": "2026-06-04T09:36:00Z",
+      "userDisplayName": "John Doe",
+      "userPrincipalName": "john.doe@yourcompany.com",
+      "ipAddress": "41.203.96.12",
+      "location": {
+        "city": "Lagos",
+        "countryOrRegion": "NG"
+      },
+      "riskLevelDuringSignIn": "high",
+      "riskState": "atRisk",
+      "status": {
+        "errorCode": 0
+      },
+      "deviceDetail": {
+        "deviceId": "",
+        "displayName": "Unknown Device",
+        "operatingSystem": "Windows"
+      },
+      "authenticationRequirement": "singleFactorAuthentication"
+    },
+    {
+      "id": "signin-002-same-user-earlier",
+      "createdDateTime": "2026-06-04T08:14:00Z",
+      "userDisplayName": "John Doe",
+      "userPrincipalName": "john.doe@yourcompany.com",
+      "ipAddress": "123.45.67.89",
+      "location": {
+        "city": "Singapore",
+        "countryOrRegion": "SG"
+      },
+      "riskLevelDuringSignIn": "none",
+      "riskState": "none",
+      "status": {
+        "errorCode": 0
+      },
+      "deviceDetail": {
+        "deviceId": "device-abc-123",
+        "displayName": "JOHN-LAPTOP",
+        "operatingSystem": "Windows"
+      },
+      "authenticationRequirement": "multiFactorAuthentication"
+    },
+    {
+      "id": "signin-003-mfa-fatigue",
+      "createdDateTime": "2026-06-04T07:55:00Z",
+      "userDisplayName": "Jane Smith",
+      "userPrincipalName": "jane.smith@yourcompany.com",
+      "ipAddress": "185.220.101.45",
+      "location": {
+        "city": "Amsterdam",
+        "countryOrRegion": "NL"
+      },
+      "riskLevelDuringSignIn": "medium",
+      "riskState": "atRisk",
+      "status": {
+        "errorCode": 0
+      },
+      "deviceDetail": {
+        "deviceId": "",
+        "displayName": "Unknown Device",
+        "operatingSystem": "Unknown"
+      },
+      "authenticationRequirement": "multiFactorAuthentication"
+    }
+  ]
+}
