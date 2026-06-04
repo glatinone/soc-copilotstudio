@@ -188,3 +188,9 @@ MIT — see [LICENSE](LICENSE)
 This system was built as an internal project at a mid-size enterprise running Microsoft 365, with the goal of getting AI-assisted security operations without adding another vendor. The full story and lessons learned are documented in a Medium article linked in the project background.
 
 The core insight: Microsoft already detects risky logins, flags phishing emails, and logs every admin action. The data is all there. The gap is that it sits in separate portals waiting for a human to go look. These agents do the looking instead.
+
+## Repository topics
+
+If you find this useful, consider adding a GitHub star. It helps others find the project.
+
+Suggested search topics: `microsoft-copilot-studio` `power-automate` `security-operations-center` `microsoft-graph-api` `entra-id` `defender-office-365` `soc-automation` `ai-security`
