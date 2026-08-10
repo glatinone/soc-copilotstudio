@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate-json:
+    name: Validate JSON files
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate flow-definition.json files
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(flows/*/flow-definition.json)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No flows/*/flow-definition.json files found."
+            exit 1
+          fi
+          status=0
+          for f in "${files[@]}"; do
+            echo "Checking $f"
+            if ! python3 -m json.tool "$f" > /dev/null; then
+              echo "::error file=$f::Invalid JSON"
+              status=1
+            fi
+          done
+          exit $status
+
+      - name: Validate sample-data JSON files
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(sample-data/*.json)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No sample-data/*.json files found."
+            exit 1
+          fi
+          status=0
+          for f in "${files[@]}"; do
+            echo "Checking $f"
+            if ! python3 -m json.tool "$f" > /dev/null; then
+              echo "::error file=$f::Invalid JSON"
+              status=1
+            fi
+          done
+          exit $status
+
+  markdown-lint:
+    name: Lint markdown files
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run markdownlint-cli2
+        uses: DavidAnson/markdownlint-cli2-action@v18
+        with:
+          globs: |
+            agents/**/*.md
+            flows/**/*.md
+            sample-data/**/*.md
+            docs/**/*.md
+            README.md
+            CHANGELOG.md
