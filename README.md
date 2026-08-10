@@ -8,6 +8,14 @@ Just Copilot Studio, Power Automate, and the Microsoft Graph API — tools you l
 
 ---
 
+## 📋 TL;DR
+
+**Problem:** most SOC automation assumes a SIEM budget and custom backend most teams don't have.
+**Solution:** five Copilot Studio agents plus Power Automate flows monitor Entra ID and Defender for Office 365 directly through the Microsoft Graph API — no Sentinel, no custom backend.
+**Stack:** Copilot Studio · Power Automate (5–15 min polling) · Microsoft Graph API.
+
+---
+
 ## What this does
 
 Five AI agents work together to monitor your Microsoft 365 environment around the clock:
